@@ -1,0 +1,11 @@
+[package_manager]
+name = "aptdeb"
+display_name = "APT (Debian)"
+executable = "apt"
+list_packages_cmd = "apt list"
+list_installed_cmd = "apt list --installed"
+search_cmd = "apt search {}"
+install_cmd = "apt install {}"
+requires_root = true
+package_separator = " "
+installed_indicator = "*"

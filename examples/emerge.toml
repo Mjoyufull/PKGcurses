@@ -1,0 +1,13 @@
+[package_manager]
+name = "emerge"
+display_name = "Portage (Gentoo)"
+executable = "equery"
+list_packages_cmd = "equery list --portage-tree '*'"
+list_installed_cmd = "equery list '*'"
+search_cmd = "emerge --search {}"
+install_cmd = "emerge {}"
+requires_root = true
+package_separator = " "
+installed_indicator = "[I"
+cleanup_regex = "^\\[.{3}\\] \\[..\\] (.+?):"
+version_regex = "([^/]+/[^-]+)-(.+)"

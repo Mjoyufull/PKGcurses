@@ -1,0 +1,11 @@
+[package_manager]
+name = "dnf"
+display_name = "DNF (Fedora/RHEL)"
+executable = "dnf"
+list_packages_cmd = "dnf list available --quiet"
+list_installed_cmd = "dnf list installed --quiet"
+search_cmd = "dnf search {}"
+install_cmd = "dnf install {}"
+requires_root = true
+package_separator = " "
+installed_indicator = "@"

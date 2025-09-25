@@ -11,6 +11,7 @@
 *.swp
 *.swo
 *~
+.gitignore
 
 # OS generated files
 .DS_Store

@@ -71,7 +71,7 @@ This document summarizes the comprehensive improvements made to fix the pmux TUI
 ```
 
 ### Multi-Selection System
-- **Space Key**: Toggle package selection
+- **Ctrl+Space Key**: Toggle package selection (only in Results pane)
 - **Visual Feedback**: ● indicators for selected packages
 - **Selection Counter**: `[3] (2/15) >> query` format
 - **Ctrl+C**: Clear all selections

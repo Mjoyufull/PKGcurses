@@ -11,7 +11,7 @@ A fast, lean, and modular terminal-based universal package manager interface wri
   - Package details unit with async AUR integration
   - Installed packages list (dynamically updated)
   - Terminal unit for installation queue and commands
-- **Multi-Selection System**: Space key to select/deselect packages, Ctrl+C to clear all
+- **Multi-Selection System**: Ctrl+Space to select/deselect packages, Ctrl+C to clear all
 - **Improved Navigation**: Direct arrow key navigation in results, optimized tab switching
 - **AUR Integration**: Full Arch User Repository support with async search and details
 - **Bedrock Linux Support**: Automatic detection of all strata package managers
@@ -63,13 +63,14 @@ The interface consists of 5 main units in an optimized layout:
 
 ### Navigation & Controls
 
-- **Arrow Keys**: Direct navigation in results (no excessive tabbing needed)
 - **Tab**: Switch between panes (Results → Search → Details → Installed → Terminal)
-- **Space**: Toggle package selection (multi-select)
+- **Arrow Keys**: Navigate within focused pane (Results or Installed lists)
+- **'/' or 'i'**: Enter search mode (focus search field)
+- **Ctrl+Space**: Toggle package selection (multi-select) - only in Results pane
 - **Enter**: Install selected packages
 - **Ctrl+C**: Clear all selections
 - **Esc**: Exit search mode or quit application
-- **Type**: Start searching (auto-enters search mode)
+- **q**: Quit application
 
 ## Package Manager Support
 

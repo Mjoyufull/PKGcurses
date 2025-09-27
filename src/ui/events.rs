@@ -15,44 +15,64 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             app.quit();
         }
         
-        // Navigation
+        // Navigation - only works when focused on navigable panes
         KeyCode::Up | KeyCode::Char('k') => {
-            app.move_up();
+            match app.active_pane {
+                ActivePane::Results | ActivePane::Installed => {
+                    app.move_up();
+                }
+                _ => {}
+            }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            app.move_down();
+            match app.active_pane {
+                ActivePane::Results | ActivePane::Installed => {
+                    app.move_down();
+                }
+                _ => {}
+            }
         }
         
-        // Multi-selection with space
-        KeyCode::Char(' ') => {
+        // Multi-selection with Ctrl+Space (only in Results pane)
+        KeyCode::Char(' ') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             if app.active_pane == ActivePane::Results {
                 app.toggle_package_selection();
             }
         }
         
-        // Pane switching
+        // Pane switching with Tab
         KeyCode::Tab => {
             app.switch_pane();
         }
         
-        // Enter search mode
+        // Enter search mode only with specific keys
         KeyCode::Char('/') | KeyCode::Char('i') => {
             app.enter_search_mode();
         }
         
-        // Page navigation
+        // Page navigation - only in navigable panes
         KeyCode::PageUp => {
-            for _ in 0..10 {
-                app.move_up();
+            match app.active_pane {
+                ActivePane::Results | ActivePane::Installed => {
+                    for _ in 0..10 {
+                        app.move_up();
+                    }
+                }
+                _ => {}
             }
         }
         KeyCode::PageDown => {
-            for _ in 0..10 {
-                app.move_down();
+            match app.active_pane {
+                ActivePane::Results | ActivePane::Installed => {
+                    for _ in 0..10 {
+                        app.move_down();
+                    }
+                }
+                _ => {}
             }
         }
         
-        // Home/End
+        // Home/End - only in navigable panes
         KeyCode::Home | KeyCode::Char('g') => {
             match app.active_pane {
                 ActivePane::Results => {
@@ -94,11 +114,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             }
         }
         
-        // Start typing to search
-        KeyCode::Char(c) if c.is_alphanumeric() || c == '-' || c == '_' => {
-            app.enter_search_mode();
-            app.add_char(c);
-        }
+        // DO NOT auto-enter search mode on typing - user must explicitly press '/' or 'i'
         
         _ => {}
     }
@@ -130,15 +146,17 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) {
             app.move_down();
         }
         
-        // Multi-selection with space in search mode
-        KeyCode::Char(' ') => {
-            // If we have results, toggle selection of current item
+        // Multi-selection with Ctrl+Space in search mode
+        KeyCode::Char(' ') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Toggle selection of current item if we have results
             if !app.filtered_packages.is_empty() {
                 app.toggle_package_selection();
-            } else {
-                // Otherwise add space to search
-                app.add_char(' ');
             }
+        }
+        
+        // Regular space adds space to search input
+        KeyCode::Char(' ') => {
+            app.add_char(' ');
         }
         
         // Clear search with Ctrl+U (must come before general Char pattern)

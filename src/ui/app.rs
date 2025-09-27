@@ -43,6 +43,10 @@ pub struct App {
     pub details_loading: bool,
     pub last_selection_time: Instant,
     
+    // Search debouncing
+    pub last_search_time: Instant,
+    pub search_debounce_ms: u64,
+    
     // Package managers
     pub package_managers: Vec<LocalPackageManager>,
     pub loading_complete: bool,
@@ -73,6 +77,9 @@ impl Default for App {
             package_details: HashMap::new(),
             details_loading: false,
             last_selection_time: Instant::now(),
+            
+            last_search_time: Instant::now(),
+            search_debounce_ms: 150,
             
             package_managers: Vec::new(),
             loading_complete: false,
@@ -154,8 +161,8 @@ impl App {
                     self.selected_index += 1;
                     self.last_selection_time = Instant::now();
                     
-                    // Adjust scroll (assuming 20 visible items)
-                    let visible_items = 20;
+                    // Adjust scroll based on terminal size
+                    let visible_items = self.get_results_visible_items();
                     if self.selected_index >= self.scroll_offset + visible_items {
                         self.scroll_offset = self.selected_index.saturating_sub(visible_items - 1);
                     }
@@ -165,7 +172,7 @@ impl App {
                 if self.installed_selected < self.installed_packages.len().saturating_sub(1) {
                     self.installed_selected += 1;
                     
-                    let visible_items = 20;
+                    let visible_items = self.get_installed_visible_items();
                     if self.installed_selected >= self.installed_scroll + visible_items {
                         self.installed_scroll = self.installed_selected.saturating_sub(visible_items - 1);
                     }
@@ -199,7 +206,7 @@ impl App {
         if self.input_mode == InputMode::Editing {
             self.search_input.insert(self.cursor_position, c);
             self.cursor_position += 1;
-            self.filter_packages();
+            self.last_search_time = Instant::now();
         }
     }
     
@@ -207,14 +214,25 @@ impl App {
         if self.input_mode == InputMode::Editing && self.cursor_position > 0 {
             self.search_input.remove(self.cursor_position - 1);
             self.cursor_position -= 1;
-            self.filter_packages();
+            self.last_search_time = Instant::now();
         }
     }
     
     pub fn clear_search(&mut self) {
         self.search_input.clear();
         self.cursor_position = 0;
+        self.last_search_time = Instant::now();
         self.filter_packages();
+    }
+    
+    pub fn should_update_search(&self) -> bool {
+        self.last_search_time.elapsed() > Duration::from_millis(self.search_debounce_ms)
+    }
+    
+    pub fn update_search_if_needed(&mut self) {
+        if self.should_update_search() {
+            self.filter_packages();
+        }
     }
     
     pub fn get_selected_package(&self) -> Option<&Package> {
@@ -234,5 +252,17 @@ impl App {
     pub fn set_package_details(&mut self, package: &Package, details: String) {
         let key = format!("{}:{}", package.source, package.name);
         self.package_details.insert(key, details);
+    }
+    
+    pub fn get_results_visible_items(&self) -> usize {
+        // Calculate based on terminal height: total height - search (3) - details (8) - borders
+        let available_height = self.terminal_size.1.saturating_sub(13);
+        (available_height as usize).max(5) // Minimum 5 items visible
+    }
+    
+    pub fn get_installed_visible_items(&self) -> usize {
+        // Right panel gets full height minus borders
+        let available_height = self.terminal_size.1.saturating_sub(2);
+        (available_height as usize).max(5) // Minimum 5 items visible
     }
 }

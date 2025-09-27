@@ -20,6 +20,7 @@ impl LocalPackageManager {
             "nix" => self.list_nix_installed(),
             "emerge" => self.list_portage_installed(),
             "dnf" => self.list_rpm_installed(),
+            "apt" => self.list_apt_installed(),
             _ => Ok(vec![]),
         }
     }
@@ -31,6 +32,7 @@ impl LocalPackageManager {
             "nix" => self.list_nix_available(),
             "emerge" => self.list_portage_available(),
             "dnf" => self.list_rpm_available(),
+            "apt" => self.list_apt_available(),
             _ => Ok(vec![]),
         }
     }
@@ -579,6 +581,71 @@ impl LocalPackageManager {
         
         Ok(packages)
     }
+    
+    fn list_apt_installed(&self) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
+        let mut packages = Vec::new();
+        
+        let output = std::process::Command::new("dpkg-query")
+            .args(&["-W", "-f=${Package}\t${Version}\t${Status}\n"])
+            .output()?;
+            
+        if !output.status.success() {
+            return Ok(packages);
+        }
+        
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() >= 3 {
+                let name = parts[0];
+                let version = parts[1];
+                let status = parts[2];
+                
+                // Only include installed packages
+                if status.contains("install ok installed") {
+                    packages.push(Package {
+                        name: name.to_string(),
+                        version: Some(version.to_string()),
+                        description: None,
+                        installed: true,
+                        source: "apt".to_string(),
+                    });
+                }
+            }
+        }
+        
+        Ok(packages)
+    }
+    
+    fn list_apt_available(&self) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
+        let mut packages = Vec::new();
+        
+        let output = std::process::Command::new("apt-cache")
+            .args(&["search", ".*"])
+            .output()?;
+            
+        if !output.status.success() {
+            return Ok(packages);
+        }
+        
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if let Some(dash_pos) = line.find(" - ") {
+                let name = &line[..dash_pos];
+                let description = &line[dash_pos + 3..];
+                
+                packages.push(Package {
+                    name: name.to_string(),
+                    version: None,
+                    description: Some(description.to_string()),
+                    installed: false,
+                    source: "apt".to_string(),
+                });
+            }
+        }
+        
+        Ok(packages)
+    }
 }
 
 use crate::core::config::Config;
@@ -689,6 +756,11 @@ pub fn detect_package_managers_with_config(config: &Config) -> Vec<LocalPackageM
         
         if Path::new("/nix/var/nix/db").exists() {
             managers.push(LocalPackageManager::new("nix".to_string(), None));
+        }
+        
+        // Check for APT (Debian/Ubuntu)
+        if Path::new("/var/lib/dpkg/status").exists() {
+            managers.push(LocalPackageManager::new("apt".to_string(), None));
         }
     }
     

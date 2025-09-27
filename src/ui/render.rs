@@ -49,10 +49,16 @@ fn draw_search_input(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_style(input_style);
     
-    let input_text = if app.search_input.is_empty() {
-        "Type to search packages...".to_string()
+    let selection_info = if !app.filtered_packages.is_empty() {
+        format!("({}/{}) ", app.selected_index + 1, app.filtered_packages.len())
     } else {
-        app.search_input.clone()
+        String::new()
+    };
+    
+    let input_text = if app.search_input.is_empty() {
+        format!("{}>> Type to search packages...", selection_info)
+    } else {
+        format!("{}>> {}", selection_info, app.search_input)
     };
     
     let paragraph = Paragraph::new(input_text)
@@ -62,10 +68,14 @@ fn draw_search_input(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(paragraph, area);
     
     // Show cursor if in editing mode
-    if app.input_mode == InputMode::Editing {
-        let cursor_x = area.x + app.cursor_position as u16 + 1;
+    if app.input_mode == InputMode::Editing && app.active_pane == ActivePane::Search {
+        let prompt_len = selection_info.len() + 3; // ">> " = 3 chars
+        let cursor_x = area.x + prompt_len as u16 + app.cursor_position as u16 + 1;
         let cursor_y = area.y + 1;
-        f.set_cursor(cursor_x, cursor_y);
+        // Ensure cursor is within bounds
+        if cursor_x < area.x + area.width.saturating_sub(1) {
+            f.set_cursor(cursor_x, cursor_y);
+        }
     }
 }
 
@@ -76,17 +86,26 @@ fn draw_results(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(Color::Gray)
     };
     
-    let title = format!(" Results ({}) ", app.filtered_packages.len());
+    // Calculate visible range
+    let visible_height = area.height.saturating_sub(2) as usize;
+    let start = app.scroll_offset;
+    let end = (start + visible_height).min(app.filtered_packages.len());
+    
+    let scroll_info = if app.filtered_packages.len() > visible_height {
+        format!(" ({}-{}/{}) ", 
+            start + 1, 
+            end, 
+            app.filtered_packages.len()
+        )
+    } else {
+        format!(" ({}) ", app.filtered_packages.len())
+    };
+    let title = format!(" Results{} ", scroll_info);
     
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
         .border_style(border_style);
-    
-    // Calculate visible range
-    let visible_height = area.height.saturating_sub(2) as usize;
-    let start = app.scroll_offset;
-    let end = (start + visible_height).min(app.filtered_packages.len());
     
     let items: Vec<ListItem> = app.filtered_packages[start..end]
         .iter()
@@ -197,17 +216,26 @@ fn draw_installed(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(Color::Gray)
     };
     
-    let title = format!(" Installed ({}) ", app.installed_packages.len());
+    // Calculate visible range
+    let visible_height = area.height.saturating_sub(2) as usize;
+    let start = app.installed_scroll;
+    let end = (start + visible_height).min(app.installed_packages.len());
+    
+    let scroll_info = if app.installed_packages.len() > visible_height {
+        format!(" ({}-{}/{}) ", 
+            start + 1, 
+            end, 
+            app.installed_packages.len()
+        )
+    } else {
+        format!(" ({}) ", app.installed_packages.len())
+    };
+    let title = format!(" Installed{} ", scroll_info);
     
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
         .border_style(border_style);
-    
-    // Calculate visible range
-    let visible_height = area.height.saturating_sub(2) as usize;
-    let start = app.installed_scroll;
-    let end = (start + visible_height).min(app.installed_packages.len());
     
     let items: Vec<ListItem> = app.installed_packages[start..end]
         .iter()

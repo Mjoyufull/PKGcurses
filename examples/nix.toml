@@ -1,11 +1,9 @@
 [package_manager]
 name = "nix"
-display_name = "Nix (flakes, nixpkgs/nixos-unstable)"
-executable = "nix"
-list_packages_cmd = "nix-env -qaP 2>/dev/null | awk '{print $1}' | sed 's/^nixpkgs\\.//' | sort -u"
-list_installed_cmd = "nix profile list 2>/dev/null | grep -oP 'nixpkgs#\\K[^@]*' | sort"
-search_cmd = "nix search nixpkgs/nixos-unstable {}"
-install_cmd = "nix profile install nixpkgs/nixos-unstable#{}"
+display_name = "Nix (nixpkgs)"
+executable = "nix-env"
+search_cmd = "nix search nixpkgs {}"
+install_cmd = "nix-env -iA nixpkgs.{}"
 requires_root = false
 package_separator = " "
 installed_indicator = "*"

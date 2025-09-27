@@ -1,0 +1,44 @@
+[main]
+sudoers = "sudo"
+rounded_borders = false
+
+[layout]
+right_column_width_percent = 30
+input_field_height = 3
+installed_list_percent = 50
+terminal_percent = 50
+
+[border_colours]
+results_unit = "#ffffff"
+installed_list_unit = "#ffffff"
+terminal_unit = "#ffffff"
+description_unit = "#ffffff"
+
+[text_colours]
+results_unit_highlight_text = "#00ff00"
+description_unit_text = "#ffffff"
+terminal_unit_highlight_text = "#00ff00"
+installed_list_unit_text = "#ffffff"
+installed_list_unit_highlight_text = "#00ff00"
+terminal_unit_text = "#ffffff"
+results_unit_text = "#ffffff"
+description_unit_highlight_text = "#00ff00"
+
+# Bedrock Linux Configuration
+# Map stratum names to their OS types for better package manager detection
+["bedrock linux"]
+# name = "os official name"
+tut-arch = "arch linux"
+gentoo = "gentoo"
+fedora = "fedora"
+ubuntu = "ubuntu"
+debian = "debian"
+
+[pm]
+enabled_pm = [
+    "nix",
+    "paru", 
+    "emerge",
+    "dnf",
+    "pacman",
+]

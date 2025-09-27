@@ -2,8 +2,6 @@
 name = "pacman"
 display_name = "Pacman (Arch Linux)"
 executable = "pacman"
-list_packages_cmd = "pacman -Slq"
-list_installed_cmd = "pacman -Q"
 search_cmd = "pacman -Ss {}"
 install_cmd = "pacman -S {}"
 requires_root = true

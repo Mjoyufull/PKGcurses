@@ -24,8 +24,8 @@ pub struct PackageManagerConfig {
     pub requires_root: bool,
     pub package_separator: String,
     pub installed_indicator: Option<String>,
-    pub cleanup_regex: Option<String>, // Optional regex to clean up package names
-    pub version_regex: Option<String>, // Optional regex to extract version
+    pub cleanup_regex: Option<String>,
+    pub version_regex: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,6 +56,42 @@ impl PackageManagerRegistry {
             
             // Create default configs for common package managers
             Self::create_default_configs(&pm_dir)?;
+        } else {
+            // Always recreate emerge and nix configs to ensure they're up to date
+            let emerge_config = pm_dir.join("emerge.toml");
+            let nix_config = pm_dir.join("nix.toml");
+            
+            eprintln!("DEBUG: Force recreating emerge and nix configs");
+            // Remove configs
+            let _ = std::fs::remove_file(&emerge_config);
+            let _ = std::fs::remove_file(&nix_config);
+            
+            // Write hardcoded configs directly to ensure they're correct
+            std::fs::write(&emerge_config, r#"[package_manager]
+name = "emerge"
+display_name = "Portage (Gentoo)"
+executable = "emerge"
+list_packages_cmd = "equery list --portage-tree '*'"
+list_installed_cmd = "equery list '*'"
+search_cmd = "emerge --search {}"
+install_cmd = "emerge {}"
+requires_root = true
+package_separator = " "
+installed_indicator = "✓"
+"#)?;
+            
+            std::fs::write(&nix_config, r#"[package_manager]
+name = "nix"
+display_name = "Nix (nixpkgs)"
+executable = "nix-env"
+list_packages_cmd = "nix-env -qaP --json"
+list_installed_cmd = "nix profile list"
+search_cmd = "nix search nixpkgs {}"
+install_cmd = "nix-env -iA nixpkgs.{}"
+requires_root = false
+package_separator = " "
+installed_indicator = "*"
+"#)?;
             
             // Create a README explaining how to add package managers
             let readme_content = r#"# Package Manager Configurations
@@ -107,7 +143,7 @@ installed_indicator = "*"
                         match toml::from_str::<PackageManagerToml>(&content) {
                             Ok(toml_config) => {
                                 let config = toml_config.package_manager;
-                                eprintln!("DEBUG: Loaded package manager: {}", config.name);
+                                eprintln!("DEBUG: Loaded package manager: {} with installed cmd: '{}'", config.name, config.list_installed_cmd);
                                 registry.managers.insert(config.name.clone(), config);
                             }
                             Err(e) => {
@@ -152,12 +188,12 @@ installed_indicator = "*"
         // Nix config
         let nix_config = r#"[package_manager]
 name = "nix"
-display_name = "Nix (flakes, nixpkgs/nixos-unstable)"
-executable = "nix"
-list_packages_cmd = "nix-env -qaP 2>/dev/null | awk '{print $1}' | sed 's/^nixpkgs\\.//' | sort -u"
-list_installed_cmd = "nix profile list 2>/dev/null | grep -oP 'nixpkgs#\\K[^@]*' | sort"
-search_cmd = "nix search nixpkgs/nixos-unstable {}"
-install_cmd = "nix profile install nixpkgs/nixos-unstable#{}"
+display_name = "Nix (nixpkgs)"
+executable = "nix-env"
+list_packages_cmd = "nix-env -qaP --json"
+list_installed_cmd = "nix profile list"
+search_cmd = "nix search nixpkgs {}"
+install_cmd = "nix-env -iA nixpkgs.{}"
 requires_root = false
 package_separator = " "
 installed_indicator = "*"
@@ -198,16 +234,14 @@ installed_indicator = "*"
         let emerge_config = r#"[package_manager]
 name = "emerge"
 display_name = "Portage (Gentoo)"
-executable = "equery"
+executable = "emerge"
 list_packages_cmd = "equery list --portage-tree '*'"
 list_installed_cmd = "equery list '*'"
 search_cmd = "emerge --search {}"
 install_cmd = "emerge {}"
 requires_root = true
 package_separator = " "
-installed_indicator = "[I"
-cleanup_regex = "^\\[.{3}\\] \\[..\\] (.+?):"
-version_regex = "([^/]+/[^-]+)-(.+)"
+installed_indicator = "✓"
 "#;
         std::fs::write(pm_dir.join("emerge.toml"), emerge_config)?;
         
@@ -254,40 +288,9 @@ installed_indicator = "*"
             .collect()
     }
     
-    pub fn list_packages(&self, manager: &PackageManagerConfig) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
-        // Check if package manager is available
-        if !self.is_available(manager) {
-            return Ok(vec![]);
-        }
-        
-        let output = Command::new(&manager.executable)
-            .args(manager.list_packages_cmd.split_whitespace().skip(1))
-            .output()?;
-            
-        if !output.status.success() {
-            return Ok(vec![]);
-        }
-        
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        self.parse_package_list(&stdout, manager)
-    }
+    // Removed list_packages - now using local detection and APIs
     
-    pub fn list_installed(&self, manager: &PackageManagerConfig) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
-        if !self.is_available(manager) {
-            return Ok(vec![]);
-        }
-        
-        let output = Command::new(&manager.executable)
-            .args(manager.list_installed_cmd.split_whitespace().skip(1))
-            .output()?;
-            
-        if !output.status.success() {
-            return Ok(vec![]);
-        }
-        
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        self.parse_package_list(&stdout, manager)
-    }
+    // Removed list_installed - now using local detection
     
     pub fn search(&self, manager: &PackageManagerConfig, query: &str) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
         if !self.is_available(manager) {
@@ -327,67 +330,106 @@ installed_indicator = "*"
             .map(|output| output.status.success())
             .unwrap_or(false);
         
-        eprintln!("DEBUG: {} executable '{}' available: {}", manager.name, manager.executable, available);
-        available
+        // Special case for emerge: also check if equery is available since we use it for listing
+        let final_available = if manager.name == "emerge" {
+            let equery_available = Command::new("which")
+                .arg("equery")
+                .output()
+                .map(|output| output.status.success())
+                .unwrap_or(false);
+            
+            eprintln!("DEBUG: {} executable '{}' available: {}, equery available: {}", 
+                     manager.name, manager.executable, available, equery_available);
+            available && equery_available
+        } else {
+            eprintln!("DEBUG: {} executable '{}' available: {}", manager.name, manager.executable, available);
+            available
+        };
+        
+        final_available
     }
     
     fn parse_package_list(&self, output: &str, manager: &PackageManagerConfig) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
         let mut packages = Vec::new();
         
+        eprintln!("DEBUG: parse_package_list called for {}", manager.name);
+        eprintln!("DEBUG: Output has {} lines", output.lines().count());
+        
         match manager.name.as_str() {
             "nix" => {
+                eprintln!("DEBUG: Using nix parser");
                 // Handle different nix command outputs
                 if output.trim().starts_with('{') {
-                    // Handle nix search JSON output
-                    if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(output) {
-                        if let Some(obj) = json_data.as_object() {
-                            for (key, value) in obj {
-                                if let Some(pkg_obj) = value.as_object() {
-                                    let package = Package {
-                                        name: key.clone(),
-                                        version: pkg_obj.get("version").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                                        description: pkg_obj.get("description").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                                        installed: false,
-                                        source: manager.name.clone(),
-                                    };
-                                    packages.push(package);
+                    eprintln!("DEBUG: Detected JSON output from nix");
+                    // Handle nix-env -qaP --json output
+                    match serde_json::from_str::<serde_json::Value>(output) {
+                        Ok(json_data) => {
+                            if let Some(obj) = json_data.as_object() {
+                                eprintln!("DEBUG: JSON has {} entries", obj.len());
+                                for (key, value) in obj {
+                                    if let Some(pkg_obj) = value.as_object() {
+                                        // Use pname if available, otherwise fall back to name or key
+                                        let package_name = pkg_obj.get("pname")
+                                            .and_then(|v| v.as_str())
+                                            .or_else(|| pkg_obj.get("name").and_then(|v| v.as_str()))
+                                            .unwrap_or(key)
+                                            .to_string();
+                                        
+                                        let version = pkg_obj.get("version").and_then(|v| v.as_str()).map(|s| s.to_string());
+                                        let description = pkg_obj.get("meta")
+                                            .and_then(|meta| meta.as_object())
+                                            .and_then(|meta_obj| meta_obj.get("description"))
+                                            .and_then(|v| v.as_str())
+                                            .map(|s| s.to_string());
+                                        
+                                        let package = Package {
+                                            name: package_name,
+                                            version,
+                                            description,
+                                            installed: false,
+                                            source: manager.name.clone(),
+                                        };
+                                        packages.push(package);
+                                    }
                                 }
+                                eprintln!("DEBUG: Parsed {} packages from JSON", packages.len());
                             }
+                        }
+                        Err(e) => {
+                            eprintln!("DEBUG: Failed to parse JSON: {}", e);
                         }
                     }
                 } else {
-                    // Handle nix-env -qaP or nix profile list output
+                    eprintln!("DEBUG: Detected text output from nix");
+                    let mut line_count = 0;
+                    let mut parsed_count = 0;
+                    
+                    // Handle nix profile list output (installed packages)
                     for line in output.lines() {
+                        line_count += 1;
+                        
                         if line.trim().is_empty() {
                             continue;
                         }
                         
-                        if line.contains("nixpkgs#") {
-                            // nix profile list output
-                            if let Some(pkg_name) = line.split("nixpkgs#").nth(1) {
-                                if let Some(name) = pkg_name.split('@').next() {
-                                    let package = Package {
-                                        name: name.to_string(),
-                                        version: None,
-                                        description: None,
-                                        installed: true,
-                                        source: manager.name.clone(),
-                                    };
-                                    packages.push(package);
-                                }
+                        if line.starts_with("Name:") {
+                            // Extract package name from "Name: packagename" format
+                            if let Some(name) = line.strip_prefix("Name:").map(|s| s.trim()) {
+                                let package = Package {
+                                    name: name.to_string(),
+                                    version: None,
+                                    description: None,
+                                    installed: true,
+                                    source: manager.name.clone(),
+                                };
+                                packages.push(package);
+                                parsed_count += 1;
+                                eprintln!("DEBUG: Found installed package: '{}'", name);
                             }
-                        } else {
-                            // nix-env -qaP output: just package names
-                            let package = Package {
-                                name: line.trim().to_string(),
-                                version: None,
-                                description: None,
-                                installed: false,
-                                source: manager.name.clone(),
-                            };
-                            packages.push(package);
                         }
                     }
+                    
+                    eprintln!("DEBUG: Nix parser processed {} lines, parsed {} packages", line_count, parsed_count);
                 }
             }
             "paru" => {
@@ -432,29 +474,43 @@ installed_indicator = "*"
                 }
             }
             "emerge" => {
+                eprintln!("DEBUG: Using emerge parser");
                 // Handle emerge/equery output
                 // Format: [-P-] [  ] acct-group/3proxy-0:0
                 // Format: [IP-] [  ] acct-group/audio-0-r3:0
+                let mut line_count = 0;
+                let mut parsed_count = 0;
+                
                 for line in output.lines() {
+                    line_count += 1;
+                    
                     if line.trim().is_empty() || !line.starts_with('[') {
+                        eprintln!("DEBUG: Skipping line {}: '{}'", line_count, line);
                         continue;
                     }
                     
                     // Skip the "* Searching for * ..." line
                     if line.contains("Searching for") {
+                        eprintln!("DEBUG: Skipping search header: '{}'", line);
                         continue;
                     }
+                    
+                    eprintln!("DEBUG: Processing emerge line {}: '{}'", line_count, line);
                     
                     // Parse the status flags [I--] or [-P-]
                     let installed = line.starts_with("[I");
                     
                     // Simple approach: split by spaces and get the 3rd element (index 2)
                     let parts: Vec<&str> = line.split_whitespace().collect();
+                    eprintln!("DEBUG: Split into {} parts: {:?}", parts.len(), parts);
+                    
                     if parts.len() >= 3 {
                         let atom_full = parts[2]; // The package atom
                         
                         // Split by : to remove slot
                         let atom = atom_full.split(':').next().unwrap_or(atom_full);
+                        
+                        eprintln!("DEBUG: Extracted atom: '{}' (installed: {})", atom, installed);
                         
                         let package = Package {
                             name: atom.to_string(),
@@ -464,8 +520,13 @@ installed_indicator = "*"
                             source: manager.name.clone(),
                         };
                         packages.push(package);
+                        parsed_count += 1;
+                    } else {
+                        eprintln!("DEBUG: Not enough parts in line: '{}'", line);
                     }
                 }
+                
+                eprintln!("DEBUG: Emerge parser processed {} lines, parsed {} packages", line_count, parsed_count);
             }
             _ => {
                 // Generic parsing with optional regex cleanup

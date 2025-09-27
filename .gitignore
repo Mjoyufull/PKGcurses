@@ -11,7 +11,6 @@
 *.swp
 *.swo
 *~
-.gitignore
 
 # OS generated files
 .DS_Store
@@ -21,6 +20,7 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+.gitignore
 
 # AI and documentation files (not public-facing)
 AI.md

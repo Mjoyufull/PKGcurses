@@ -9,6 +9,8 @@ pub struct Config {
     pub layout: LayoutConfig,
     pub border_colours: HashMap<String, String>,
     pub text_colours: HashMap<String, String>,
+    #[serde(rename = "bedrock linux")]
+    pub bedrock_linux: Option<HashMap<String, String>>,
     pub pm: PmConfig,
 }
 
@@ -62,8 +64,9 @@ impl Default for Config {
             },
             border_colours,
             text_colours,
+            bedrock_linux: None, // Will be populated if user configures it
             pm: PmConfig {
-                enabled_pm: vec!["nix".to_string(), "paru".to_string(), "apt".to_string(), "emerge".to_string(), "dnf".to_string(), "pacman".to_string()],
+                enabled_pm: vec!["nix".to_string(), "paru".to_string(), "emerge".to_string(), "dnf".to_string(), "pacman".to_string()],
             },
         }
     }

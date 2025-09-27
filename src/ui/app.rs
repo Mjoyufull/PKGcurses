@@ -326,8 +326,8 @@ impl App {
         Ok(())
     }
     
-    // Method to get package details (for the details pane)
-    pub async fn get_package_details(&self, package: &Package) -> String {
+    // Method to fetch package details asynchronously (for the details pane)
+    pub async fn fetch_package_details(&self, package: &Package) -> String {
         if package.source == "paru" {
             match self.aur_client.get_package_details(&package.name).await {
                 Ok(details) => details,

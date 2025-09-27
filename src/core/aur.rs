@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use crate::core::package_managers::Package;
 use std::error::Error;
 

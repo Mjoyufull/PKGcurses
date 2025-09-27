@@ -63,12 +63,12 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             match app.active_pane {
                 ActivePane::Results => {
                     app.selected_index = app.filtered_packages.len().saturating_sub(1);
-                    let visible_items = 20;
+                    let visible_items = app.get_results_visible_items();
                     app.scroll_offset = app.selected_index.saturating_sub(visible_items - 1);
                 }
                 ActivePane::Installed => {
                     app.installed_selected = app.installed_packages.len().saturating_sub(1);
-                    let visible_items = 20;
+                    let visible_items = app.get_installed_visible_items();
                     app.installed_scroll = app.installed_selected.saturating_sub(visible_items - 1);
                 }
                 _ => {}
@@ -111,6 +111,11 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) {
             app.move_down();
         }
         
+        // Clear search with Ctrl+U (must come before general Char pattern)
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.clear_search();
+        }
+        
         // Text editing
         KeyCode::Char(c) => {
             app.add_char(c);
@@ -122,7 +127,7 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) {
             // Delete character at cursor (not implemented for simplicity)
         }
         
-        // Cursor movement (not implemented for simplicity)
+        // Cursor movement
         KeyCode::Left => {
             if app.cursor_position > 0 {
                 app.cursor_position -= 1;
@@ -132,11 +137,6 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) {
             if app.cursor_position < app.search_input.len() {
                 app.cursor_position += 1;
             }
-        }
-        
-        // Clear search with Ctrl+U
-        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.clear_search();
         }
         
         _ => {}

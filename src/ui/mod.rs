@@ -52,12 +52,13 @@ pub fn run_tui(initial_query: Option<String>) -> Result<(), Box<dyn std::error::
     // Start background loading
     let (packages_tx, packages_rx) = std::sync::mpsc::channel();
     let (installed_tx, installed_rx) = std::sync::mpsc::channel();
+    let (details_tx, details_rx) = std::sync::mpsc::channel();
     
     start_package_loading(managers, packages_tx, installed_tx);
 
     // Main loop
     let mut last_tick = Instant::now();
-    let tick_rate = Duration::from_millis(50); // 20 FPS
+    let tick_rate = Duration::from_millis(100); // 10 FPS - more reasonable for TUI
     
     loop {
         // Handle incoming packages
@@ -68,11 +69,19 @@ pub fn run_tui(initial_query: Option<String>) -> Result<(), Box<dyn std::error::
             app.set_installed_packages(installed);
         }
         
+        // Handle incoming package details
+        if let Ok((package, details)) = details_rx.try_recv() {
+            app.set_package_details(&package, details);
+        }
+        
+        // Update search if debounce time has passed
+        app.update_search_if_needed();
+        
         // Fetch package details if needed
         if app.should_fetch_details() {
-            if let Some(package) = app.get_selected_package() {
-                if app.get_package_details(package).is_none() {
-                    fetch_package_details(&mut app, package.clone());
+            if let Some(package) = app.get_selected_package().cloned() {
+                if app.get_package_details(&package).is_none() {
+                    fetch_package_details_async(package, details_tx.clone());
                 }
             }
         }
@@ -146,55 +155,69 @@ fn start_package_loading(
     });
 }
 
-fn fetch_package_details(app: &mut App, package: Package) {
-    let details = match package.source.as_str() {
-        "pacman" => {
-            std::process::Command::new("pacman")
-                .args(&["-Si", &package.name])
-                .output()
-                .ok()
-                .filter(|output| output.status.success())
-                .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
-                .unwrap_or_else(|| format!("No details available for {}", package.name))
-        }
-        "paru" => {
-            std::process::Command::new("paru")
-                .args(&["-Si", &package.name])
-                .output()
-                .ok()
-                .filter(|output| output.status.success())
-                .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
-                .unwrap_or_else(|| format!("No AUR details available for {}", package.name))
-        }
-        "dnf" => {
-            std::process::Command::new("dnf")
-                .args(&["info", &package.name])
-                .output()
-                .ok()
-                .filter(|output| output.status.success())
-                .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
-                .unwrap_or_else(|| format!("No DNF details available for {}", package.name))
-        }
-        "emerge" => {
-            std::process::Command::new("emerge")
-                .args(&["--info", &package.name])
-                .output()
-                .ok()
-                .filter(|output| output.status.success())
-                .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
-                .unwrap_or_else(|| format!("No Portage details available for {}", package.name))
-        }
-        "nix" => {
-            std::process::Command::new("nix-env")
-                .args(&["-qa", "--description", &package.name])
-                .output()
-                .ok()
-                .filter(|output| output.status.success())
-                .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
-                .unwrap_or_else(|| format!("No Nix details available for {}", package.name))
-        }
-        _ => format!("Package: {}\nSource: {}", package.name, package.source),
-    };
+fn fetch_package_details_async(
+    package: Package,
+    details_tx: std::sync::mpsc::Sender<(Package, String)>,
+) {
+    thread::spawn(move || {
+        let details = match package.source.as_str() {
+            "pacman" => {
+                std::process::Command::new("pacman")
+                    .args(&["-Si", &package.name])
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+                    .unwrap_or_else(|| format!("No details available for {}", package.name))
+            }
+            "paru" => {
+                std::process::Command::new("paru")
+                    .args(&["-Si", &package.name])
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+                    .unwrap_or_else(|| format!("No AUR details available for {}", package.name))
+            }
+            "dnf" => {
+                std::process::Command::new("dnf")
+                    .args(&["info", &package.name])
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+                    .unwrap_or_else(|| format!("No DNF details available for {}", package.name))
+            }
+            "emerge" => {
+                std::process::Command::new("emerge")
+                    .args(&["--info", &package.name])
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+                    .unwrap_or_else(|| format!("No Portage details available for {}", package.name))
+            }
+            "nix" => {
+                std::process::Command::new("nix-env")
+                    .args(&["-qa", "--description", &package.name])
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+                    .unwrap_or_else(|| format!("No Nix details available for {}", package.name))
+            }
+            "apt" => {
+                std::process::Command::new("apt-cache")
+                    .args(&["show", &package.name])
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+                    .unwrap_or_else(|| format!("No APT details available for {}", package.name))
+            }
+            _ => format!("Package: {}\nSource: {}", package.name, package.source),
+        };
 
-    app.set_package_details(&package, details);
+        let _ = details_tx.send((package, details));
+    });
 }

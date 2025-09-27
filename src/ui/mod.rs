@@ -27,7 +27,7 @@ use crate::core::{
     package_managers::Package,
 };
 
-pub fn run_tui(initial_query: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_tui(initial_query: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -53,6 +53,7 @@ pub fn run_tui(initial_query: Option<String>) -> Result<(), Box<dyn std::error::
     let (packages_tx, packages_rx) = std::sync::mpsc::channel();
     let (installed_tx, installed_rx) = std::sync::mpsc::channel();
     let (details_tx, details_rx) = std::sync::mpsc::channel();
+    let (aur_tx, aur_rx) = std::sync::mpsc::channel();
     
     start_package_loading(managers, packages_tx, installed_tx);
 
@@ -74,8 +75,26 @@ pub fn run_tui(initial_query: Option<String>) -> Result<(), Box<dyn std::error::
             app.set_package_details(&package, details);
         }
         
+        // Handle incoming AUR packages
+        if let Ok(aur_packages) = aur_rx.try_recv() {
+            app.add_aur_packages(aur_packages);
+        }
+        
         // Update search if debounce time has passed
         app.update_search_if_needed();
+        
+        // Trigger AUR search if search input has changed and contains text
+        if !app.search_input.is_empty() && app.should_update_search() {
+            let query = app.search_input.clone();
+            if query.len() >= 2 { // Only search if query is at least 2 characters
+                let aur_tx_clone = aur_tx.clone();
+                tokio::spawn(async move {
+                    if let Ok(aur_packages) = search_aur_async(&query).await {
+                        let _ = aur_tx_clone.send(aur_packages);
+                    }
+                });
+            }
+        }
         
         // Fetch package details if needed
         if app.should_fetch_details() {
@@ -220,4 +239,10 @@ fn fetch_package_details_async(
 
         let _ = details_tx.send((package, details));
     });
+}
+
+async fn search_aur_async(query: &str) -> Result<Vec<Package>, Box<dyn std::error::Error + Send + Sync>> {
+    use crate::core::aur::AurClient;
+    let aur_client = AurClient::new();
+    aur_client.search(query).await
 }

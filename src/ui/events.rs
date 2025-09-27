@@ -23,6 +23,13 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             app.move_down();
         }
         
+        // Multi-selection with space
+        KeyCode::Char(' ') => {
+            if app.active_pane == ActivePane::Results {
+                app.toggle_package_selection();
+            }
+        }
+        
         // Pane switching
         KeyCode::Tab => {
             app.switch_pane();
@@ -75,6 +82,18 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) {
             }
         }
         
+        // Clear selection
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.clear_selection();
+        }
+        
+        // Install selected packages
+        KeyCode::Enter => {
+            if app.get_selected_count() > 0 {
+                app.start_installation();
+            }
+        }
+        
         // Start typing to search
         KeyCode::Char(c) if c.is_alphanumeric() || c == '-' || c == '_' => {
             app.enter_search_mode();
@@ -99,7 +118,7 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) {
             app.active_pane = ActivePane::Results;
         }
         
-        // Navigation in search
+        // Navigation in search - switch to results and navigate
         KeyCode::Up => {
             app.input_mode = InputMode::Normal;
             app.active_pane = ActivePane::Results;
@@ -109,6 +128,17 @@ fn handle_editing_mode(app: &mut App, key: KeyEvent) {
             app.input_mode = InputMode::Normal;
             app.active_pane = ActivePane::Results;
             app.move_down();
+        }
+        
+        // Multi-selection with space in search mode
+        KeyCode::Char(' ') => {
+            // If we have results, toggle selection of current item
+            if !app.filtered_packages.is_empty() {
+                app.toggle_package_selection();
+            } else {
+                // Otherwise add space to search
+                app.add_char(' ');
+            }
         }
         
         // Clear search with Ctrl+U (must come before general Char pattern)

@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::fs;
 use crate::core::package_managers::Package;
+use crate::core::aur::AurClient;
 
 #[derive(Clone)]
 pub struct LocalPackageManager {
@@ -34,6 +35,26 @@ impl LocalPackageManager {
             "dnf" => self.list_rpm_available(),
             "apt" => self.list_apt_available(),
             _ => Ok(vec![]),
+        }
+    }
+    
+    // Async method for AUR search
+    pub async fn search_aur(&self, query: &str) -> Result<Vec<Package>, Box<dyn std::error::Error + Send + Sync>> {
+        if self.name == "paru" {
+            let aur_client = AurClient::new();
+            aur_client.search(query).await
+        } else {
+            Ok(vec![])
+        }
+    }
+    
+    // Async method for getting AUR package details
+    pub async fn get_aur_details(&self, package_name: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        if self.name == "paru" {
+            let aur_client = AurClient::new();
+            aur_client.get_package_details(package_name).await
+        } else {
+            Ok(format!("Package details not available for {}", self.name))
         }
     }
     

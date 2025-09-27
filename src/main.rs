@@ -3,7 +3,8 @@ mod core;
 
 use std::env;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Set up panic handler to restore terminal
     std::panic::set_hook(Box::new(|_| {
         use crossterm::{execute, terminal};
@@ -20,7 +21,7 @@ fn main() {
         args.get(0).cloned()
     };
 
-    match ui::run_tui(initial_query) {
+    match ui::run_tui(initial_query).await {
         Ok(()) => {},
         Err(e) => {
             eprintln!("Error: {}", e);

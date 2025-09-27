@@ -11,30 +11,37 @@ use crate::ui::app::{App, ActivePane, InputMode};
 pub fn draw(f: &mut Frame, app: &App) {
     let size = f.size();
     
-    // Main layout: horizontal split
-    let chunks = Layout::default()
+    // Main layout: horizontal split (70% left, 30% right)
+    let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
         .split(size);
     
-    // Left side: search + results + details
+    // Left side: 5-unit layout (Results -> Search -> Details)
     let left_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),      // Search input
-            Constraint::Min(10),        // Results
-            Constraint::Length(8),      // Details
+            Constraint::Min(8),         // Results (top)
+            Constraint::Length(3),      // Search input (center)
+            Constraint::Length(8),      // Details (bottom)
         ])
-        .split(chunks[0]);
+        .split(main_chunks[0]);
     
-    // Right side: installed packages
-    let right_chunk = chunks[1];
+    // Right side: split between installed and terminal
+    let right_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(60), // Installed packages
+            Constraint::Percentage(40), // Terminal/installation output
+        ])
+        .split(main_chunks[1]);
     
-    // Draw components
-    draw_search_input(f, app, left_chunks[0]);
-    draw_results(f, app, left_chunks[1]);
-    draw_details(f, app, left_chunks[2]);
-    draw_installed(f, app, right_chunk);
+    // Draw components in new order
+    draw_results(f, app, left_chunks[0]);      // Top left
+    draw_search_input(f, app, left_chunks[1]); // Center left
+    draw_details(f, app, left_chunks[2]);      // Bottom left
+    draw_installed(f, app, right_chunks[0]);   // Top right
+    draw_terminal(f, app, right_chunks[1]);    // Bottom right
 }
 
 fn draw_search_input(f: &mut Frame, app: &App, area: Rect) {
@@ -55,10 +62,17 @@ fn draw_search_input(f: &mut Frame, app: &App, area: Rect) {
         String::new()
     };
     
-    let input_text = if app.search_input.is_empty() {
-        format!("{}>> Type to search packages...", selection_info)
+    let selected_count = app.get_selected_count();
+    let selected_info = if selected_count > 0 {
+        format!("[{}] ", selected_count)
     } else {
-        format!("{}>> {}", selection_info, app.search_input)
+        String::new()
+    };
+    
+    let input_text = if app.search_input.is_empty() {
+        format!("{}{}>> Type to search packages...", selected_info, selection_info)
+    } else {
+        format!("{}{}>> {}", selected_info, selection_info, app.search_input)
     };
     
     let paragraph = Paragraph::new(input_text)
@@ -69,7 +83,7 @@ fn draw_search_input(f: &mut Frame, app: &App, area: Rect) {
     
     // Show cursor if in editing mode
     if app.input_mode == InputMode::Editing && app.active_pane == ActivePane::Search {
-        let prompt_len = selection_info.len() + 3; // ">> " = 3 chars
+        let prompt_len = selected_info.len() + selection_info.len() + 3; // ">> " = 3 chars
         let cursor_x = area.x + prompt_len as u16 + app.cursor_position as u16 + 1;
         let cursor_y = area.y + 1;
         // Ensure cursor is within bounds
@@ -114,9 +128,11 @@ fn draw_results(f: &mut Frame, app: &App, area: Rect) {
             let actual_index = start + i;
             let is_selected = actual_index == app.selected_index;
             
-            // Format: "  name                    ✓ source"
+            // Format: "[x] name                    ✓ source"
+            let selected_indicator = if app.is_package_selected(package) { "●" } else { " " };
             let installed_indicator = if package.installed { "✓" } else { " " };
-            let content = format!("  {:<40} {} {}", 
+            let content = format!("{} {:<38} {} {}", 
+                selected_indicator,
                 package.name, 
                 installed_indicator, 
                 package.source
@@ -266,4 +282,61 @@ fn draw_installed(f: &mut Frame, app: &App, area: Rect) {
     }
     
     f.render_stateful_widget(list, area, &mut list_state);
+}
+
+fn draw_terminal(f: &mut Frame, app: &App, area: Rect) {
+    let border_style = if app.active_pane == ActivePane::Terminal {
+        Style::default().fg(Color::Green)
+    } else {
+        Style::default().fg(Color::Gray)
+    };
+    
+    let selected_count = app.get_selected_count();
+    let title = if selected_count > 0 {
+        format!(" Terminal - {} selected ", selected_count)
+    } else {
+        " Terminal ".to_string()
+    };
+    
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_style(border_style);
+    
+    let content = if selected_count > 0 {
+        let mut lines = vec![
+            Line::from("Selected packages for installation:"),
+            Line::from(""),
+        ];
+        
+        for (i, package_key) in app.get_selected_packages_list().iter().enumerate() {
+            if i < 10 { // Show max 10 packages to avoid overflow
+                lines.push(Line::from(format!("  {}", package_key)));
+            } else if i == 10 {
+                lines.push(Line::from(format!("  ... and {} more", selected_count - 10)));
+                break;
+            }
+        }
+        
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Press Enter to install selected packages",
+            Style::default().fg(Color::Yellow)
+        )));
+        
+        lines
+    } else {
+        vec![
+            Line::from("No packages selected for installation."),
+            Line::from(""),
+            Line::from("Use Space to select packages in the results list."),
+            Line::from("Use Ctrl+C to clear selection."),
+        ]
+    };
+    
+    let paragraph = Paragraph::new(content)
+        .block(block)
+        .wrap(Wrap { trim: true });
+    
+    f.render_widget(paragraph, area);
 }

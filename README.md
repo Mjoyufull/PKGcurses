@@ -4,14 +4,19 @@ A fast, lean, and modular terminal-based universal package manager interface wri
 
 ## Features
 
-- **Universal Interface**: Support for multiple package managers (Nix, AUR/paru/yay, APT, DNF, etc.)
-- **5-Unit TUI Layout**: 
-  - Results unit with package listing
-  - Input field with dynamic query and selection counter
-  - Description unit showing package details
+- **Universal Interface**: Support for multiple package managers (Nix, AUR/paru, APT, DNF, Pacman, Emerge)
+- **Enhanced 5-Unit TUI Layout**: 
+  - Results unit with package listing and multi-selection (● indicators)
+  - Centered search field with selection counter `[3] (2/15) >> query`
+  - Package details unit with async AUR integration
   - Installed packages list (dynamically updated)
-  - Terminal unit for installation commands
+  - Terminal unit for installation queue and commands
+- **Multi-Selection System**: Space key to select/deselect packages, Ctrl+C to clear all
+- **Improved Navigation**: Direct arrow key navigation in results, optimized tab switching
+- **AUR Integration**: Full Arch User Repository support with async search and details
+- **Bedrock Linux Support**: Automatic detection of all strata package managers
 - **Smart Caching**: Fast package database caching with configurable refresh intervals
+- **Async Architecture**: Non-blocking operations with tokio runtime
 - **Modular Architecture**: Easy to add new package managers
 - **Full Color Support**: Customizable themes and color schemes
 - **Root/Sudo Handling**: Automatic privilege escalation when needed
@@ -48,25 +53,42 @@ Configuration files are stored in `~/.config/pmux/`:
 
 ## TUI Interface
 
-The interface consists of 5 main units:
+The interface consists of 5 main units in an optimized layout:
 
-1. **Results Unit**: Scrollable list of packages with source indicators
-2. **Input Field**: Search query with selection counter (e.g., "(1/366) >> █")
-3. **Description Unit**: Package information and details
-4. **Installed List**: Dynamic list of installed packages
-5. **Terminal Unit**: Live installation output and command execution
+1. **Results Unit** (Top): Scrollable list of packages with multi-selection indicators (●)
+2. **Search Field** (Center): Dynamic search with selection counter `[3] (2/15) >> query`
+3. **Details Unit** (Bottom): Package information with async AUR details
+4. **Installed List** (Right Top): Dynamic list of installed packages
+5. **Terminal Unit** (Right Bottom): Installation queue and live command output
+
+### Navigation & Controls
+
+- **Arrow Keys**: Direct navigation in results (no excessive tabbing needed)
+- **Tab**: Switch between panes (Results → Search → Details → Installed → Terminal)
+- **Space**: Toggle package selection (multi-select)
+- **Enter**: Install selected packages
+- **Ctrl+C**: Clear all selections
+- **Esc**: Exit search mode or quit application
+- **Type**: Start searching (auto-enters search mode)
 
 ## Package Manager Support
 
-- ✅ Nix (nix profile)
-- ✅ AUR (paru, yay)
-- ✅ APT (Debian/Ubuntu)
-- 🚧 DNF (Fedora/RHEL)
-- 🚧 Pacman (Arch)
+- ✅ **Pacman** (Arch Linux) - Full support with package details
+- ✅ **AUR** (paru/yay) - Complete integration with async search and details
+- ✅ **DNF** (Fedora/RHEL) - Package listing and installation
+- ✅ **Emerge** (Gentoo/Portage) - Portage tree support
+- ✅ **Nix** (NixOS/nix-env) - Nix package manager support
+- ✅ **APT** (Debian/Ubuntu) - Full APT integration
+- ✅ **Bedrock Linux** - Automatic detection of all strata package managers
 - 🚧 Zypper (openSUSE)
-- 🚧 Portage (Gentoo)
 - 🚧 Flatpak
 - 🚧 Snap
+
+### AUR Integration Features
+- Real-time search with AUR RPC v5 API
+- Package details with dependencies, votes, and popularity
+- Async operations for smooth UI experience
+- Automatic detection on Arch Linux systems
 
 ## Building
 
